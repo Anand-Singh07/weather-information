@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weather Today by Anand Singh</title>
+  
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #60a5fa;
+      --danger: #f87171;
+      --ok: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 32px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 20% -10%, #1e293b 0%, var(--bg) 55%);
+      color: var(--text);
+      min-height: 100vh; display: grid; place-items: center;
+    }
+    .app {
+      width: 100%; max-width: 560px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      backdrop-filter: blur(6px);
+      padding: 22px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+    .title {
+      display: flex; align-items: center; gap: 10px; margin: 0 0 14px;
+      font-weight: 700; letter-spacing: 0.3px;
+    }
+    .title .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 20px var(--accent); }
+    form {
+      display: grid; grid-template-columns: 1fr auto; gap: 10px; margin: 10px 0 16px;
+    }
+    input[type="text"] {
+      width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12);
+      background: #0b1220; color: var(--text); outline: none; font-size: 16px;
+    }
+    input::placeholder { color: var(--muted); }
+    button {
+      padding: 12px 16px; border-radius: 12px; border: 0; cursor: pointer;
+      background: var(--accent); color: #0b1220; font-weight: 700; transition: transform .05s ease;
+    }
+    button:active { transform: translateY(1px); }
+    .hint { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+    .card {
+      display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center;
+      background: var(--card); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px;
+    }
+    .big {
+      font-size: 48px; font-weight: 800; line-height: 1;
+    }
+    .cond { color: var(--muted); margin-top: 6px; }
+    .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+    .pill {
+      background: #0b1220; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; padding: 10px; text-align: center; font-size: 14px;
+    }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .icon { width: 64px; height: 64px; border-radius: 12px; background: #0b1220; display: grid; place-items: center; overflow: hidden; }
+    .error { color: var(--danger); background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.25); padding: 10px 12px; border-radius: 10px; }
+    .ok { color: var(--ok); }
+    .sr-only { position: absolute; left: -9999px; }
+    .footer { color: var(--muted); font-size: 12px; margin-top: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+  <main class="app" aria-labelledby="app-title">
+    <h1 id="app-title" class="title"><span class="dot" aria-hidden="true"></span> Weather Today</h1>
+
+    <p class="hint">Type a city, state, or coordinates (e.g. <code>London</code> or <code>51.5072,-0.1276</code>) and press Enter.</p>
+
+    <form id="search-form" autocomplete="off" role="search" aria-label="Weather search">
+      <label for="location-input" class="sr-only">Location</label>
+      <input id="location-input" type="text" placeholder="Search location…" required />
+      <button id="search-btn" type="submit">Search</button>
+    </form>
+
+    <section id="output" aria-live="polite" aria-atomic="true"></section>
+
+    <p class="footer">Powered by WeatherAPI • Current conditions</p>
+  </main>
+
+  <script>
+    // 🔑 Insert your key here. Keep secrets server-side in production.
+    const API_KEY = "7c3a8d2b97034d92964194347250911";
+
+    const form = document.getElementById("search-form");
+    const input = document.getElementById("location-input");
+    const out = document.getElementById("output");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (!q) return;
+
+      renderLoading();
+      try {
+        const url = `https://api.weatherapi.com/v1/current.json?key=${encodeURIComponent(API_KEY)}&q=${encodeURIComponent(q)}&aqi=yes`;
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+
+        // WeatherAPI returns 200 for success, 4xx with an error object for failures
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          const msg = data?.error?.message || "Unable to fetch weather.";
+          renderError(msg);
+          return;
+        }
+
+        renderWeather(data);
+      } catch (err) {
+        renderError("Network error. Please check your connection.");
+      }
+    });
+
+    function renderLoading() {
+      out.innerHTML = `
+        <div class="pill">Fetching latest weather…</div>
+      `;
+    }
+
+    function renderError(message) {
+      out.innerHTML = `
+        <div class="error" role="alert">⚠️ ${escapeHTML(message)}</div>
+      `;
+    }
+
+    function renderWeather(data) {
+      const {
+        location: { name, region, country, localtime } = {},
+        current: {
+          temp_c, temp_f, condition, wind_kph, humidity, feelslike_c, feelslike_f, last_updated, air_quality
+        } = {}
+      } = data;
+
+      const place = [name, region, country].filter(Boolean).join(", ");
+
+      // AQI (optional, since aqi=yes)
+      const pm25 = air_quality?.pm2_5?.toFixed?.(1);
+      const aqiInfo = pm25 ? `<div class="pill">PM2.5<br><strong>${pm25}</strong> µg/m³</div>` : "";
+
+      out.innerHTML = `
+        <article class="card">
+          <div class="icon">
+            ${condition?.icon ? `<img src="https:${condition.icon}" alt="${escapeHTML(condition?.text || "Weather icon")}" width="64" height="64" loading="lazy">` : "🌤️"}
+          </div>
+          <div>
+            <div class="row">
+              <div class="big">${Math.round(temp_c)}°C</div>
+            </div>
+            <div class="cond">
+              <span>${escapeHTML(condition?.text || "—")}</span>
+              <span> • Feels like ${Math.round(feelslike_c)}°C</span>
+            </div>
+            <div class="cond">Wind ${Math.round(wind_kph)} kph • Humidity ${Math.round(humidity)}%</div>
+            <div class="cond">Local time: ${escapeHTML(localtime || last_updated || "")}</div>
+
+            <div class="meta">
+              <div class="pill">Location<br><strong>${escapeHTML(place)}</strong></div>
+              <div class="pill">Temp (°F)<br><strong>${Math.round(temp_f)}</strong></div>
+              ${aqiInfo}
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    // Minimal HTML escaping to prevent accidental HTML injection from API strings
+    function escapeHTML(str) {
+      return String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+  </script>
+</body>
+</html>
